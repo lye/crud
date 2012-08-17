@@ -25,7 +25,7 @@ And this existing schema:
 		, foo_time TIMESTAMP NOT NULL
 		);
 
-With vanila database/sql, to extract values from an *sql.Rows you have to do a
+With vanilla database/sql, to extract values from an *sql.Rows you have to do a
 considerable amount of hoop-jumping:
 
 	// old code
