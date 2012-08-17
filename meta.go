@@ -5,8 +5,15 @@ import (
 	"reflect"
 )
 
+/* 
+sqlToGoFields extracts the data contained within the "crud" struct tags.
+
+The "crud" struct tags contain the name of the SQL column which stores the
+tagged field. sqlToGoFields returns a mapping from SQL column name to Go
+field name.
+*/
 func sqlToGoFields(ty reflect.Type) (map[string]string, error) {
-	ty = indirect(ty)
+	ty = indirectT(ty)
 
 	if ty.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("sqlToGoFields: type %s is not a struct", ty.Name())
@@ -27,10 +34,20 @@ func sqlToGoFields(ty reflect.Type) (map[string]string, error) {
 	return fieldMap, nil
 }
 
-func indirect(ty reflect.Type) reflect.Type {
+/* indirectT returns the passed type, recursively indirected. */
+func indirectT(ty reflect.Type) reflect.Type {
 	for ty.Kind() == reflect.Ptr {
 		ty = ty.Elem()
 	}
 
 	return ty
+}
+
+/* indirectV returns the passed type, recursively indirected. */
+func indirectV(val reflect.Value) reflect.Value {
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	return val
 }
