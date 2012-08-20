@@ -15,7 +15,7 @@ If the object passed in as arg does not have a primary key set (or the
 value is 0), an error is returned.
 */
 func Update(db DbIsh, table, sqlIdFieldName string, arg interface{}) error {
-	val := reflect.ValueOf(arg)
+	val := indirectV(reflect.ValueOf(arg))
 	ty := val.Type()
 
 	fieldMap, er := sqlToGoFields(ty)
@@ -54,7 +54,7 @@ func Update(db DbIsh, table, sqlIdFieldName string, arg interface{}) error {
 Insert creates a new record in the datastore.
 */
 func Insert(db DbIsh, table, sqlIdFieldName string, arg interface{}) (int64, error) {
-	val := reflect.ValueOf(arg)
+	val := indirectV(reflect.ValueOf(arg))
 	ty := val.Type()
 
 	fieldMap, er := sqlToGoFields(ty)
