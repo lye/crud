@@ -108,6 +108,50 @@ func TestSingleFoo(t *testing.T) {
 	}
 }
 
+func TestModifyFoo(t *testing.T) {
+	db, er := createDb()
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer db.Close()
+
+	f := newFoo()
+
+	if f.Id, er = Insert(db, "foo", "foo_id", f) ; er != nil {
+		t.Fatal(er)
+	}
+
+	f.Num = 3
+	f.Str = "hello"
+
+	if er := Update(db, "foo", "foo_id", f) ; er != nil {
+		t.Fatal(er)
+	}
+
+	rows, er := db.Query("SELECT * FROM foo")
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	foos := []Foo{}
+
+	if er := ScanAll(rows, &foos) ; er != nil {
+		t.Fatal(er)
+	}
+
+	if len(foos) != 1 {
+		t.Fatalf("Got wrong number of foos: %d (expected %d)", len(foos), 1)
+	}
+
+	if foos[0].Str != "hello" {
+		t.Errorf("Str mismatch: expected '%s', got '%s'", "hello", foos[0].Str)
+	}
+
+	if foos[0].Num != 3 {
+		t.Errorf("Num mismatch: expected %d, got %d", 3, foos[0].Num)
+	}
+}
+
 func TestMultipleFoo(t *testing.T) {
 	db, er := createDb()
 	if er != nil {
