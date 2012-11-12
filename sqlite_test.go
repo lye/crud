@@ -14,6 +14,17 @@ type Foo struct {
 	Time time.Time `crud:"foo_time"`
 }
 
+type OptionalFoo struct {
+	Int8 *int8 `crud:"o_int8"`
+	Int16 *int16 `crud:"o_int16"`
+	Int32 *int32 `crud:"o_int32"`
+	Int64 *int64 `crud:"o_int64"`
+	Float32 *float32 `crud:"o_float32"`
+	Float64 *float64 `crud:"o_float64"`
+	Bool *bool `crud:"o_bool"`
+	String *string `crud:"o_string"`
+}
+
 func newFoo() Foo {
 	return Foo{
 		Num: 42,
@@ -34,7 +45,7 @@ func createDb() (*sql.DB, error) {
 			, foo_num INTEGER NOT NULL
 			, foo_str VARCHAR(34) NOT NULL
 			, foo_time TIMESTAMP NOT NULL
-			)
+			);
 	`)
 
 	if er != nil {
@@ -42,7 +53,25 @@ func createDb() (*sql.DB, error) {
 		return nil, er
 	}
 
-	return db, er
+	_, er = db.Exec(`
+		CREATE TABLE ofoo
+			( o_int8 INTEGER
+			, o_int16 INTEGER
+			, o_int32 INTEGER
+			, o_int64 INTEGER
+			, o_float32 REAL
+			, o_float64 REAL
+			, o_bool BOOL
+			, o_string VARCHAR(255)
+			);
+	`)
+
+	if er != nil {
+		db.Close()
+		return nil, er
+	}
+
+	return db, nil
 }
 
 func TestSingleFoo(t *testing.T) {
@@ -273,5 +302,171 @@ func TestMultipleFoo(t *testing.T) {
 		} else {
 			t.Errorf("Got unknown foo from ScanAll: %#v\n", foo)
 		}
+	}
+}
+
+func TestOptionalFoo(t *testing.T) {
+	db, er := createDb()
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer db.Close()
+
+	var Int8 int8 = 8
+	var Int16 int16 = 16
+	var Int32 int32 = 32
+	var Int64 int64 = 64
+	var Float32 float32 = 0.32
+	var Float64 float64 = 0.64
+	var Bool bool = true
+	var String string = "string"
+
+	f1 := OptionalFoo{
+		Int8: &Int8,
+		Int16: &Int16,
+		Int32: &Int32,
+		Int64: &Int64,
+		Float32: &Float32,
+		Float64: &Float64,
+		Bool: &Bool,
+		String: &String,
+	}
+
+	if _, er := Insert(db, "ofoo", "", f1) ; er != nil {
+		t.Fatal(er)
+	}
+
+	rows, er := db.Query("SELECT * FROM ofoo")
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatalf("No rows returned? wtf")
+	}
+
+	f2 := OptionalFoo{}
+
+	if er := Scan(rows, &f2) ; er != nil {
+		t.Fatal(er)
+	}
+
+	if f2.Int8 == nil {
+		t.Errorf("Int8 - nil")
+
+	} else if *f2.Int8 != Int8 {
+		t.Errorf("Int8 - mismatch")
+	}
+
+	if f2.Int16 == nil {
+		t.Errorf("Int16 - nil")
+
+	} else if *f2.Int16 != Int16 {
+		t.Errorf("Int16 - mismatch")
+	}
+
+	if f2.Int32 == nil {
+		t.Errorf("Int32 - nil")
+
+	} else if *f2.Int32 != Int32 {
+		t.Errorf("Int32 - mismatch")
+	}
+
+	if f2.Int64 == nil {
+		t.Errorf("Int64 - nil")
+
+	} else if *f2.Int64 != Int64 {
+		t.Errorf("Int64 - mismatch")
+	}
+
+	if f2.Float32 == nil {
+		t.Errorf("Float32 - nil")
+
+	} else if *f2.Float32 != Float32 {
+		t.Errorf("Float32 - mismatch")
+	}
+
+	if f2.Float64 == nil {
+		t.Errorf("Float64 - nil")
+
+	} else if *f2.Float64 != Float64 {
+		t.Errorf("Float64 - mismatch")
+	}
+
+	if f2.Bool == nil {
+		t.Errorf("Bool - nil")
+
+	} else if *f2.Bool != Bool {
+		t.Errorf("Bool - mismatch")
+	}
+
+	if f2.String == nil {
+		t.Errorf("String - nil")
+
+	} else if *f2.String != String {
+		t.Errorf("String - mismatch")
+	}
+}
+
+func TestNullOptionalFoo(t *testing.T) {
+	db, er := createDb()
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer db.Close()
+
+	f1 := OptionalFoo{}
+
+	if _, er := Insert(db, "ofoo", "", f1) ; er != nil {
+		t.Fatal(er)
+	}
+
+	rows, er := db.Query("SELECT * FROM ofoo")
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatal("No rows returned?")
+	}
+
+	f2 := OptionalFoo{}
+
+	if er := Scan(rows, &f2) ; er != nil {
+		t.Fatal(er)
+	}
+
+	if f2.Int8 != nil {
+		t.Errorf("Int8 - not nil")
+	}
+
+	if f2.Int16 != nil {
+		t.Errorf("Int16 - not nil")
+	}
+
+	if f2.Int32 != nil {
+		t.Errorf("Int32 - not nil")
+	}
+
+	if f2.Int64 != nil {
+		t.Errorf("Int64 - not nil")
+	}
+
+	if f2.Float32 != nil {
+		t.Errorf("Float32 - not nil")
+	}
+
+	if f2.Float64 != nil {
+		t.Errorf("Float64 - not nil")
+	}
+
+	if f2.Bool != nil {
+		t.Errorf("Bool - not nil")
+	}
+
+	if f2.String != nil {
+		t.Errorf("String - not nil")
 	}
 }

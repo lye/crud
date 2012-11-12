@@ -27,6 +27,11 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 
 	writeBackMap := make(map[string]interface{})
 
+	intRemap := make(map[reflect.Value]*sql.NullInt64)
+	floatRemap := make(map[reflect.Value]*sql.NullFloat64)
+	boolRemap := make(map[reflect.Value]*sql.NullBool)
+	stringRemap := make(map[reflect.Value]*sql.NullString)
+
 	for _, arg := range args {
 		val := indirectV(reflect.ValueOf(arg))
 		ty := val.Type()
@@ -42,6 +47,47 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 		}
 
 		for sqlName, goName := range fieldMap {
+			field := val.FieldByName(goName)
+			fieldType := field.Type()
+
+			if fieldType.Kind() == reflect.Ptr {
+				fieldElemKind := fieldType.Elem().Kind()
+
+				switch fieldElemKind {
+				case reflect.Int8:
+					fallthrough
+				case reflect.Int16:
+					fallthrough
+				case reflect.Int32:
+					fallthrough
+				case reflect.Int64:
+					nullInt := new(sql.NullInt64)
+					writeBackMap[sqlName] = nullInt
+					intRemap[field] = nullInt
+					continue
+
+				case reflect.Float32:
+					fallthrough
+				case reflect.Float64:
+					nullFloat := new(sql.NullFloat64)
+					writeBackMap[sqlName] = nullFloat
+					floatRemap[field] = nullFloat
+					continue
+
+				case reflect.Bool:
+					nullBool := new(sql.NullBool)
+					writeBackMap[sqlName] = nullBool
+					boolRemap[field] = nullBool
+					continue
+
+				case reflect.String:
+					nullString := new(sql.NullString)
+					writeBackMap[sqlName] = nullString
+					stringRemap[field] = nullString
+					continue
+				}
+			}
+
 			sqlName = prefix + sqlName
 			writeBackMap[sqlName] = val.FieldByName(goName).Addr().Interface()
 		}
@@ -68,6 +114,52 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 	if er := rows.Scan(writeBack...) ; er != nil {
 		fmt.Printf("Error encountered, columns: %#v\n", cols)
 		return er
+	}
+
+	for field, nullInt := range intRemap {
+		if nullInt.Valid {
+			switch field.Type().Elem().Kind() {
+			case reflect.Int8:
+				tmp := int8(nullInt.Int64)
+				field.Set(reflect.ValueOf(&tmp))
+
+			case reflect.Int16:
+				tmp := int16(nullInt.Int64)
+				field.Set(reflect.ValueOf(&tmp))
+
+			case reflect.Int32:
+				tmp := int32(nullInt.Int64)
+				field.Set(reflect.ValueOf(&tmp))
+
+			case reflect.Int64:
+				field.Set(reflect.ValueOf(&nullInt.Int64))
+			}
+		}
+	}
+
+	for field, nullFloat := range floatRemap {
+		if nullFloat.Valid {
+			switch field.Type().Elem().Kind() {
+			case reflect.Float32:
+				tmp := float32(nullFloat.Float64)
+				field.Set(reflect.ValueOf(&tmp))
+
+			case reflect.Float64:
+				field.Set(reflect.ValueOf(&nullFloat.Float64))
+			}
+		}
+	}
+
+	for field, nullBool := range boolRemap {
+		if nullBool.Valid {
+			field.Set(reflect.ValueOf(&nullBool.Bool))
+		}
+	}
+
+	for field, nullString := range stringRemap {
+		if nullString.Valid {
+			field.Set(reflect.ValueOf(&nullString.String))
+		}
 	}
 
 	return nil
