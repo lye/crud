@@ -14,6 +14,7 @@ Consider this case:
 		Num int64 `crud:"foo_num"`
 		Str string `crud:"foo_str"`
 		Time time.Time `crud:"foo_time"`
+		UnixTime time.Time `crud:"foo_unix_time,unix"`
 	}
 
 And this existing schema:
@@ -23,19 +24,20 @@ And this existing schema:
 		, foo_num INTEGER NOT NULL
 		, foo_str VARCHAR(24) NOT NULL
 		, foo_time TIMESTAMP NOT NULL
+		, foo_unix_time INTEGER NOT NULL
 		);
 
 With vanilla database/sql, to extract values from an *sql.Rows you have to do a
 considerable amount of hoop-jumping:
 
 	// old code
-	rows, _ := db.Query("SELECT foo_id, foo_num, foo_str, foo_time FROM foos")
+	rows, _ := db.Query("SELECT foo_id, foo_num, foo_str, foo_time, foo_unix_time FROM foos")
 	defer rows.Close()
 
 	foos := []Foos{}
 	for rows.Next() {
 		var foo Foo
-		rows.Scan(&foo.Id, &foo.Num, &foo.Str, &foo.Time)
+		rows.Scan(&foo.Id, &foo.Num, &foo.Str, &foo.Time, &foo.UnixTime)
 		foos = append(foos, foo)
 	}
 
@@ -49,6 +51,13 @@ noisy code increases significantly. crud provides the following alternative:
 	crud.ScanAll(rows, &foos)
 
 The magic of reflection handles the rest.
+
+Each struct field that has a corresponding SQL row must be tagged with the SQL 
+row name. For time types, the "unix" tag can be used to trigger marshalling between
+the Go time.Time type and a numeric SQL field. 
+
+Any pointer fields with a corresponding sql.Null* type are marshalled to/from 
+the Null type for proper interaction with database/sql.
 
 Despite the wonder, crud is not without drawbacks. As with all interfaces that
 use reflection internally, you lose both performance (untested as to how much)

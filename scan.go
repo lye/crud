@@ -2,6 +2,7 @@ package crud
 
 import (
 	"fmt"
+	"time"
 	"reflect"
 	"database/sql"
 )
@@ -31,6 +32,7 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 	floatRemap := make(map[reflect.Value]*sql.NullFloat64)
 	boolRemap := make(map[reflect.Value]*sql.NullBool)
 	stringRemap := make(map[reflect.Value]*sql.NullString)
+	unixTimeRemap := make(map[reflect.Value]*sql.NullInt64)
 
 	for _, arg := range args {
 		val := indirectV(reflect.ValueOf(arg))
@@ -46,11 +48,20 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 			return er
 		}
 
-		for sqlName, goName := range fieldMap {
+		for sqlName, meta := range fieldMap {
+			goName := meta.GoName
+			sqlName = prefix + sqlName
+
 			field := val.FieldByName(goName)
 			fieldType := field.Type()
 
-			if fieldType.Kind() == reflect.Ptr {
+			if meta.Unix {
+				nullInt := new(sql.NullInt64)
+				writeBackMap[sqlName] = nullInt
+				unixTimeRemap[field] = nullInt
+				continue
+
+			} else if fieldType.Kind() == reflect.Ptr {
 				fieldElemKind := fieldType.Elem().Kind()
 
 				switch fieldElemKind {
@@ -88,7 +99,6 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 				}
 			}
 
-			sqlName = prefix + sqlName
 			writeBackMap[sqlName] = val.FieldByName(goName).Addr().Interface()
 		}
 
@@ -159,6 +169,27 @@ func Scan(rows *sql.Rows, args ...interface{}) error {
 	for field, nullString := range stringRemap {
 		if nullString.Valid {
 			field.Set(reflect.ValueOf(&nullString.String))
+		}
+	}
+
+	for field, nullInt := range unixTimeRemap {
+		if nullInt.Valid {
+			t := time.Unix(nullInt.Int64, 0)
+
+			if field.Kind() == reflect.Ptr && field.Type().Elem() == reflect.TypeOf(time.Time{}) {
+				if field.IsNil() {
+					newVal := &time.Time{}
+					field.Set(reflect.ValueOf(newVal))
+				}
+
+				field = field.Elem()
+			}
+
+			if field.Type() != reflect.TypeOf(time.Time{}) {
+				return fmt.Errorf("Cannot map a unix time to a non-time field (%T)", field.Interface())
+			}
+
+			field.Set(reflect.ValueOf(t))
 		}
 	}
 

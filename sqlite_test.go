@@ -25,6 +25,13 @@ type OptionalFoo struct {
 	String *string `crud:"o_string"`
 }
 
+type TimeFoo struct {
+	Int time.Time `crud:"time_int,unix"`
+	IntPtr *time.Time `crud:"time_int_ptr,unix"`
+	Time time.Time `crud:"time_val"`
+	TimePtr *time.Time `crud:"time_val_ptr"`
+}
+
 func newFoo() Foo {
 	return Foo{
 		Num: 42,
@@ -64,6 +71,20 @@ func createDb() (*sql.DB, error) {
 			, o_bool BOOL
 			, o_string VARCHAR(255)
 			);
+	`)
+
+	if er != nil {
+		db.Close()
+		return nil, er
+	}
+
+	_, er = db.Exec(`
+		CREATE TABLE tfoo
+			( time_int INTEGER NOT NULL
+			, time_int_ptr INTEGER
+			, time_val TIMESTAMP NOT NULL
+			, time_val_ptr TIMESTAMP
+			)
 	`)
 
 	if er != nil {
@@ -468,5 +489,98 @@ func TestNullOptionalFoo(t *testing.T) {
 
 	if f2.String != nil {
 		t.Errorf("String - not nil")
+	}
+}
+
+func TestTimeMarshalling(t *testing.T) {
+	db, er := createDb()
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	/* Ugh, convert to Unix for granularity reasons; strip off TZ data
+	 * because SQLite doesn't understand them and they affect both .Equal 
+	 * and .Unix */
+	now := time.Unix(time.Now().Unix(), 0).UTC()
+
+	foo1 := TimeFoo{
+		Int: now,
+		IntPtr: &now,
+		Time: now,
+		TimePtr: &now,
+	}
+
+	foo2 := TimeFoo{}
+
+	testEqual := func() {
+		if foo1.Int.Unix() != foo2.Int.Unix() {
+			t.Errorf("mismatch - Int, e: %d, a: %d", foo1.Int.Unix(), foo2.Int.Unix())
+		}
+
+		if foo1.IntPtr.Unix() != foo2.IntPtr.Unix() {
+			t.Errorf("mismatch - IntPtr, e: %d, a: %d", foo1.IntPtr.Unix(), foo2.IntPtr.Unix())
+		}
+
+		if !foo1.Time.Equal(foo2.Time) {
+			t.Errorf("mismatch - Time\ne: %s\na: %s", foo1.Time.String(), foo2.Time.String())
+		}
+
+		if !foo1.TimePtr.Equal(*foo2.TimePtr) {
+			t.Errorf("mismatch - TimePtr\ne: %s\na: %s", foo1.TimePtr.String(), foo2.TimePtr.String())
+		}
+	}
+
+	if _, er := Insert(db, "tfoo", "", foo1) ; er != nil {
+		t.Fatal(er)
+	}
+
+	rows, er := db.Query("SELECT time_int, time_int_ptr, time_val, time_val_ptr FROM tfoo")
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	if !rows.Next() {
+		rows.Close()
+		t.Errorf("Insert inserted no rows?")
+
+	} else {
+		var tmpInt int64
+		var tmpIntPtr sql.NullInt64
+
+		if er := rows.Scan(&tmpInt, &tmpIntPtr, &foo2.Time, &foo2.TimePtr) ; er != nil {
+			rows.Close()
+			t.Error(er)
+
+		} else {
+			tmp := time.Unix(tmpIntPtr.Int64, 0)
+			foo2.IntPtr = &tmp
+			foo2.Int = time.Unix(tmpInt, 0)
+
+			testEqual()
+		}
+
+		rows.Close()
+	}
+
+	foo2 = TimeFoo{}
+
+	rows, er = db.Query("SELECT * FROM tfoo")
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	if !rows.Next() {
+		rows.Close()
+		t.Errorf("Rows are gone?")
+
+	} else {
+		if er := Scan(rows, &foo2) ; er != nil {
+			rows.Close()
+			t.Error(er)
+
+		} else {
+			rows.Close()
+			testEqual()
+		}
 	}
 }

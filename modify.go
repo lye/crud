@@ -2,6 +2,7 @@ package crud
 
 import (
 	"fmt"
+	"time"
 	"reflect"
 	"strings"
 )
@@ -28,13 +29,24 @@ func Update(db DbIsh, table, sqlIdFieldName string, arg interface{}) error {
 	placeholderId := 0
 	var id int64 = 0
 
-	for sqlName, goName := range fieldMap {
+	for sqlName, meta := range fieldMap {
+		goName := meta.GoName
+
 		if sqlName == sqlIdFieldName {
 			id = val.FieldByName(goName).Int()
 
 		} else {
+			fieldVal := val.FieldByName(goName).Interface()
+
+			if timeVal, ok := fieldVal.(time.Time) ; ok && meta.Unix {
+				fieldVal = timeVal.Unix()
+
+			} else if timeVal, ok := fieldVal.(*time.Time) ; ok && meta.Unix && timeVal != nil {
+				fieldVal = timeVal.Unix()
+			}
+
 			sqlFields = append(sqlFields, fmt.Sprintf("%s = $%d", sqlName, placeholderId))
-			newValues = append(newValues, val.FieldByName(goName).Interface())
+			newValues = append(newValues, fieldVal)
 			placeholderId += 1
 		}
 	}
@@ -66,13 +78,23 @@ func Insert(db DbIsh, table, sqlIdFieldName string, arg interface{}) (int64, err
 	newValues := make([]interface{}, len(fieldMap))[:0]
 	placeholders := make([]string, len(fieldMap))[:0]
 
-	for sqlName, goName := range fieldMap {
+	for sqlName, meta := range fieldMap {
 		if sqlName == sqlIdFieldName {
 			continue
 		}
 
+		goName := meta.GoName
+		fieldVal := val.FieldByName(goName).Interface()
+
+		if timeVal, ok := fieldVal.(time.Time) ; ok && meta.Unix {
+			fieldVal = timeVal.Unix()
+
+		} else if timeVal, ok := fieldVal.(*time.Time) ; ok && meta.Unix && timeVal != nil {
+			fieldVal = timeVal.Unix()
+		}
+
 		sqlFields = append(sqlFields, sqlName)
-		newValues = append(newValues, val.FieldByName(goName).Interface())
+		newValues = append(newValues, fieldVal)
 		placeholders = append(placeholders, fmt.Sprintf("$%d", len(placeholders) + 1))
 	}
 
